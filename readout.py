@@ -50,38 +50,48 @@ class Readout:
         """        
         return self._osc0.buffer
 
-    def start_server(self):
-        """Start the server.
-        """        
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind("tcp://*:5555")
-
-        print("Server started")
+    def start_rawbuffer_server(self, socket: zmq.Socket):
+        print("Rawbuffer server started")
         while True:
             message = socket.recv()
             print(f"Received request: {message}")
-            if message == 0:
-                # Get the signal data
-                # signal_data = np.array(self.get_buffer(), dtype=np.int32)
-                # Send the reply back to the client
-                socket.send_pyobj(self._osc0.buffer)
+            buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+            socket.send(buffer_np, copy=False)
 
-            # # Create Signal protobuf message
-            # signal_msg = signal_pb2.Signal()
-            # signal_msg.buffer.extend(self.get_buffer())
-            # # Send the reply back to the client
-            # socket.send(signal_msg.SerializeToString())
+    def start_protobuf_server(self, socket: zmq.Socket):
+        print("Protobuf server started")
+        while True:
+            message = socket.recv()
+            print(f"Received request: {message}")
 
-            # Get the signal data
-            signal_data = np.array(self.get_buffer(), dtype=np.int32)
-
+            # Create Signal protobuf message
+            signal_msg = signal_pb2.Signal()
+            signal_msg.buffer.extend(self.get_buffer())
             # Send the reply back to the client
-            socket.send_pyobj(signal_data)
+            socket.send(signal_msg.SerializeToString(), copy=False)
+    
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--mode", type=str, help="mode of the server", 
+                        default="protobuf", choices=["protobuf", "raw", ])
+    # parser.add_argument("-v", "--verbosity", action="count", default=0,
+    #                     help="increase output verbosity")
+    args = parser.parse_args()
+    print(f"{args = }")
+
+    context = zmq.Context()
+    socket = context.socket(zmq.REP)
+    socket.bind("tcp://*:5555")
+    print("Server started")
+
     readout = Readout()
-    readout.start_server()
+    if args.mode == "protobuf":
+        readout.start_protobuf_server(socket)
+    elif args.mode == "raw":
+        readout.start_rawbuffer_server(socket)
+
 
 if __name__ == "__main__":
     main()
