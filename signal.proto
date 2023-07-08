@@ -1,0 +1,10 @@
+// signal.proto
+syntax = "proto3";
+
+message Signal {
+    repeated sint32 buffer = 1;    // buffer of signal
+}
+
+message SignalBytes {
+    bytes buffer = 1;    // buffer of signal
+}
