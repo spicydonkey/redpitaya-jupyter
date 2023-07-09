@@ -38,10 +38,16 @@ socket.bind("tcp://*:5555")
 buffer = np.arange(2**14, dtype=np.int16)
 
 while True:
-    print("Sending data...")
-    socket.send(buffer, copy=True)
+    # synchronization and trigger sources are the default,
+    # which is the module itself
+    osc0.reset()
+    osc0.start()
+    osc0.trigger()
 
-    # buffer_np = np.ctypeslib.as_array(osc0.buffer)
-    # buffer_copy = np.empty(len(osc0.buffer))
-    # buffer_copy[:] = buffer_np[:]
-    # socket.send(buffer_copy, copy=False)
+    print("Sending data...")
+    #socket.send(buffer, copy=True)
+
+    buffer_np = np.ctypeslib.as_array(osc0.buffer)
+    buffer_copy = np.empty(len(osc0.buffer))
+    buffer_copy[:] = buffer_np[:]
+    socket.send(buffer_copy, copy=False)

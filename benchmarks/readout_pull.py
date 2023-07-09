@@ -1,5 +1,6 @@
 
 import argparse
+import time
 
 import zmq
 import numpy as np
@@ -19,9 +20,15 @@ socket = context.socket(zmq.PULL)
 # Connect to the server's address
 socket.connect(f"tcp://{args.ip}:{args.port}")
 
+
+timestamp = time.perf_counter()
 while True:
     # Receive the data
+    start = time.perf_counter()
     data = socket.recv()
+    end = time.perf_counter()
+    duration = end - start
+    print(f"{duration = :.3g}")
 
     # Convert the received bytes back into a numpy array
     data = np.frombuffer(data, dtype=np.int16)
