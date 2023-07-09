@@ -1,9 +1,13 @@
+import time
+
 import numpy as np
 
 import signal_pb2
 import zmq
 
 from redpitaya.overlay.mercury import mercury as overlay
+
+MOCK_DATA = np.arange(2**14)
 
 class Readout:
     """Readout system.
@@ -55,8 +59,30 @@ class Readout:
         while True:
             message = socket.recv()
             print(f"Received request: {message}")
+            # Bus error
+            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+            #socket.send(buffer_np, copy=True)  # error for even copy=False
+
+            # OK: 3 ms
+            #socket.send(np.arange(2**14), copy=False)
+
+            # OK: 2.5 ms
+            #socket.send(MOCK_DATA, copy=False)
+
+            # Crashes
+            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer).copy()
+            #socket.send(buffer_np, copy=True)
+
+            # OK: 5.6 ms
             buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-            socket.send(buffer_np, copy=False)
+            buffer_copy = np.empty(len(self._osc0.buffer))
+            buffer_copy[:] = buffer_np[:]
+            socket.send(buffer_copy, copy=False)
+
+            # bus error
+            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+            #socket.send(buffer_np[:], copy=False)
+
 
     def start_protobuf_server(self, socket: zmq.Socket):
         print("Protobuf server started")
