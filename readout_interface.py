@@ -39,20 +39,25 @@ class ReadoutInterface:
         logger.info(f"Received reply: {message}")
 
     #def get_raw_buffer(self) -> tuple[npt.NDArray, int, float]:
-    def get_raw_buffer(self) -> npt.NDArray[np.float_]:
+    def get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
         """Get the raw buffer from the oscilloscope.
 
         Returns:
-            (raw_samples, trigger, timestamp):
+            (raw_samples, pointer, timestamp):
                 raw_samples: raw samples in buffer
-                trigger: index to trigger.
+                pointer: index to trigger.
                 timestamp: timestamp of the trigger.
         """
         print("get_raw_buffer")
         self._socket.send(b"1")
-        response = self._socket.recv(copy=False)
-        raw_buffer = np.frombuffer(response, dtype=np.float_)
-        return raw_buffer
+        # response = self._socket.recv(copy=False)
+        # raw_buffer = np.frombuffer(response, dtype=np.float_)
+
+        raw_buffer_bytes, pointer_bytes, timestamp_bytes = self._socket.recv_multipart(copy=True)  # otherwise returned as Frames
+        raw_buffer = np.frombuffer(raw_buffer_bytes, dtype=np.float_)
+        pointer = int(pointer_bytes.decode("utf-8"))
+        timestamp = float(timestamp_bytes.decode("utf-8"))
+        return raw_buffer, pointer, timestamp
 
     def start(self):
         raise NotImplementedError
@@ -76,8 +81,10 @@ def main():
     # readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
     while True:
-        raw_buffer = readout_interface.get_raw_buffer()
+        raw_buffer, pointer, timestamp = readout_interface.get_raw_buffer()
         print(f"{raw_buffer[:20] = }")
+        print(f"{pointer = }")
+        print(f"{timestamp = }")
 
 if __name__ == "__main__":
     main()

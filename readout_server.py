@@ -2,6 +2,7 @@
 """
 
 import logging
+import time
 
 import numpy as np
 import zmq
@@ -57,15 +58,26 @@ class ReadoutServer:
         # self._osc0.edge = "pos"
         # self._osc0.level = [0.4, 0.5]
 
-    def trigger(self) -> None:
+    def trigger(self) -> tuple[int, float]:
         """Force a trigger.
+        
+        Returns:
+            (pointer, timestamp):
+                pointer: The index of the trigger.
+                timestamp: The timestamp of the trigger.
         """
         # synchronization and trigger sources are the default,
         # which is the module itself
-        print("Triggering")
+        print("Triggering...")
         self._osc0.reset()
         self._osc0.start()
         self._osc0.trigger()
+        while self._osc0.status_run():
+            pass
+        timestamp = time.perf_counter()
+        pointer = int(self._osc0.pointer)
+        print ('Triggered!')
+        return (pointer, timestamp)
 
     def run(self):
         """Run the server.
@@ -77,7 +89,7 @@ class ReadoutServer:
             # FIXME: currently there is no handling of requests -- the server just 
             # sends the buffer back to the client.
             print(f"Received request: {message}")
-            self.trigger()
+            pointer, timestamp = self.trigger()
 
             # Bus error
             #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
@@ -97,15 +109,28 @@ class ReadoutServer:
             buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
             buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
             buffer_copy[:] = buffer_np[:]
-            self._socket.send(buffer_copy, copy=False)
+            # self._socket.send(buffer_copy, copy=False)
 
             print(f"{type(buffer_np[0]) = }")
             print(f"{type(buffer_copy[0]) = }")  # it's in np.float_
             print(f"{buffer_copy[:20] = }")
 
+            print(f"{pointer = }")
+            print(f"{timestamp = }")
+
             # bus error
             #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
             #socket.send(buffer_np[:], copy=False)
+
+            self._socket.send_multipart(
+                [
+                    buffer_copy,
+                    str(pointer).encode("utf-8"),
+                    str(timestamp).encode("utf-8"),
+                ],
+                copy=True,  # otherwise "Frame"
+                )
+
 
 def main():
     import argparse
