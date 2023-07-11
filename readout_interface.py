@@ -76,3 +76,6 @@ def main():
     while True:
         message = readout_interface.get_raw_buffer()
         print(f"{message = }")
+
+if __name__ == "__main__":
+    main()
