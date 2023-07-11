@@ -2,6 +2,7 @@
 """
 
 import logging
+import pickle
 
 import numpy as np
 import numpy.typing as npt
@@ -19,7 +20,7 @@ class ReadoutInterface:
         self._socket.connect(f"tcp://{self._ip}:{self._port}")
         logger.info(f"Connected to tcp://{self._ip}:{self._port}")
 
-    def configure(self, 
+    def configure(self,
                   decimation: int,
                   trigger_pre: int,
                   trigger_post: int,
@@ -27,18 +28,20 @@ class ReadoutInterface:
                   ) -> None:
         """Configure the readout system.
         """
-        raise NotImplementedError
-        self._socket.send_pyobj({
-            "command": "configure",
+        print("Configuring readout system...")
+        data = {
             "decimation": decimation,
             "trigger_pre": trigger_pre,
             "trigger_post": trigger_post,
             # "trig_src": trig_src,
-        })
-        message = self._socket.recv_pyobj()
-        logger.info(f"Received reply: {message}")
+        }
+        print(f"{data = }")
+        self._socket.send(b"c" + pickle.dumps(data))
 
-    #def get_raw_buffer(self) -> tuple[npt.NDArray, int, float]:
+        # wait for the response
+        message = self._socket.recv()
+        print(message)
+
     def get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
         """Get the raw buffer from the oscilloscope.
 
@@ -49,7 +52,7 @@ class ReadoutInterface:
                 timestamp: timestamp of the trigger.
         """
         print("get_raw_buffer")
-        self._socket.send(b"1")
+        self._socket.send(b"g")
         # response = self._socket.recv(copy=False)
         # raw_buffer = np.frombuffer(response, dtype=np.float_)
 
@@ -78,7 +81,8 @@ def main():
     print(f"{args = }")
 
     readout_interface = ReadoutInterface(ip=args.ip, port=args.port)
-    # readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
+
+    readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
     while True:
         raw_buffer, pointer, timestamp = readout_interface.get_raw_buffer()

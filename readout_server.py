@@ -2,6 +2,7 @@
 """
 
 import logging
+import pickle
 import time
 
 import numpy as np
@@ -39,7 +40,7 @@ class ReadoutServer:
         self._socket.bind(f"tcp://*:{port}")
         print(f"Server started: tcp://*:{port}")
 
-    def configure_capture(self,
+    def configure(self,
                   decimation: int,
                   trigger_pre: int,
                   trigger_post: int,
@@ -47,11 +48,9 @@ class ReadoutServer:
                   ) -> None:
         """Configure the readout system.
         """
-        raise NotImplementedError
         self._osc0.decimation = decimation
         self._osc0.trigger_pre = trigger_pre
         self._osc0.trigger_post = trigger_post
-        
         self._osc0.trig_src = 0  # disable hardware trigger sources
         # self._osc0.trig_src = self._fpga.trig_src[trig_src]
         # self._osc0.trig_src = self._fpga.trig_src["osc1"]
@@ -79,58 +78,71 @@ class ReadoutServer:
         print ('Triggered!')
         return (pointer, timestamp)
 
+    def transfer_raw_buffer(self) -> None:
+        pointer, timestamp = self.trigger()  # NOTE: this is overloading the meaning of transfer
+
+        # Bus error
+        #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+        #socket.send(buffer_np, copy=True)  # error for even copy=False
+
+        # OK: 3 ms
+        #socket.send(np.arange(2**14), copy=False)
+
+        # OK: 2.5 ms
+        #socket.send(MOCK_DATA, copy=False)
+
+        # Crashes
+        #buffer_np = np.ctypeslib.as_array(self._osc0.buffer).copy()
+        #socket.send(buffer_np, copy=True)
+
+        # bus error
+        #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+        #socket.send(buffer_np[:], copy=False)
+
+        # OK: 5.6 ms
+        buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+        buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
+        buffer_copy[:] = buffer_np[:]
+
+        print(f"{type(buffer_np[0]) = }")
+        print(f"{type(buffer_copy[0]) = }")  # it's in np.float_
+        print(f"{buffer_copy[:20] = }")
+        print(f"{pointer = }")
+        print(f"{timestamp = }")
+
+        self._socket.send_multipart(
+            [
+                buffer_copy,
+                str(pointer).encode("utf-8"),
+                str(timestamp).encode("utf-8"),
+            ],
+            copy=True,  # otherwise "Frame"
+            )
+
     def run(self):
         """Run the server.
         """
         print("Server running.")
         while True:
-            
+             #  Wait for next request from client
             message = self._socket.recv()
-            # FIXME: currently there is no handling of requests -- the server just 
-            # sends the buffer back to the client.
             print(f"Received request: {message}")
-            pointer, timestamp = self.trigger()
 
-            # Bus error
-            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-            #socket.send(buffer_np, copy=True)  # error for even copy=False
+            # first byte of the message will determine the command
+            command = message[0]
 
-            # OK: 3 ms
-            #socket.send(np.arange(2**14), copy=False)
-
-            # OK: 2.5 ms
-            #socket.send(MOCK_DATA, copy=False)
-
-            # Crashes
-            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer).copy()
-            #socket.send(buffer_np, copy=True)
-
-            # OK: 5.6 ms
-            buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-            buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
-            buffer_copy[:] = buffer_np[:]
-            # self._socket.send(buffer_copy, copy=False)
-
-            print(f"{type(buffer_np[0]) = }")
-            print(f"{type(buffer_copy[0]) = }")  # it's in np.float_
-            print(f"{buffer_copy[:20] = }")
-
-            print(f"{pointer = }")
-            print(f"{timestamp = }")
-
-            # bus error
-            #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-            #socket.send(buffer_np[:], copy=False)
-
-            self._socket.send_multipart(
-                [
-                    buffer_copy,
-                    str(pointer).encode("utf-8"),
-                    str(timestamp).encode("utf-8"),
-                ],
-                copy=True,  # otherwise "Frame"
-                )
-
+            # Handle commands
+            if command == ord('g'):  # 'g' for 'get'
+                self.transfer_raw_buffer()
+            elif command == ord('c'):  # 'c' for 'configure'
+                # rest_of_message should contain the configuration data
+                message_body = message[1:]
+                parameters = pickle.loads(message_body)
+                print(f"{parameters = }")
+                self.configure(**parameters)
+                self._socket.send(b"Configuration complete")
+            else:
+                self._socket.send(b"Unknown command")
 
 def main():
     import argparse
