@@ -12,7 +12,16 @@ import zmq
 logger = logging.getLogger(__name__)
 
 class ReadoutInterface:
-    def __init__(self, ip: str, port: str="5555") -> None:
+    """Readout system interface.
+    """
+
+    def __init__(self, ip: str="localhost", port: str="5555") -> None:
+        """Initialize the interface.
+
+        Args:
+            ip: The IP address of the server. Defaults to "localhost".
+            port: The port on the host. Defaults to "5555".
+        """
         self._ip = ip
         self._port = port
         self._context = zmq.Context()
@@ -20,14 +29,48 @@ class ReadoutInterface:
         self._socket.connect(f"tcp://{self._ip}:{self._port}")
         logger.info(f"Connected to tcp://{self._ip}:{self._port}")
 
+        self.configure()
+
+    @property
+    def scale(self) -> float:
+        """The scale factor for the input range.
+
+        input range to scale mapping:
+        1.0:    1/32767.0
+        20.0:   20.0/32767.0
+        """
+        return 3.051850947599719e-05  # 1.0/32767.0
+
+    @property
+    def sampling_rate(self) -> float:
+        """The sampling rate of the readout system.
+
+        decimation to sampling frequency mapping:
+            formula: 125e6/decimation
+            where decimation should be a power of 2
+        """
+        return 125000000.0 / self.decimation
+
+    @property
+    def decimation(self) -> int:
+        """The decimation factor of the readout system.
+        """
+        return self._decimation
+
     def configure(self,
-                  decimation: int,
-                  trigger_pre: int,
-                  trigger_post: int,
+                  decimation: int=1,
+                  trigger_pre: int=0,
+                  trigger_post: int=2**14,
                 #   trig_src: str,
                   ) -> None:
         """Configure the readout system.
+
+        Args:
+            decimation: The decimation factor, as a power of 2. Defaults to 1.
+            trigger_pre: The pre-trigger delay. Defaults to 0.
+            trigger_post: The post-trigger delay. Defaults to 2**14.
         """
+        self._decimation = decimation
         print("Configuring readout system...")
         data = {
             "decimation": decimation,
@@ -69,6 +112,8 @@ class ReadoutInterface:
         raise NotImplementedError
 
 def main(): 
+    """Test of the readout interface.
+    """
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--ip", type=str, help="ip address of the server",
