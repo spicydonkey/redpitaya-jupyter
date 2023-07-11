@@ -95,9 +95,13 @@ class ReadoutServer:
 
             # OK: 5.6 ms
             buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-            buffer_copy = np.empty(len(self._osc0.buffer))
+            buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
             buffer_copy[:] = buffer_np[:]
             self._socket.send(buffer_copy, copy=False)
+
+            print(f"{type(buffer_np[0]) = }")
+            print(f"{type(buffer_copy[0]) = }")  # it's in np.float_
+            print(f"{buffer_copy[:20] = }")
 
             # bus error
             #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
@@ -118,3 +122,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

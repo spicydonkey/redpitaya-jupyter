@@ -38,7 +38,8 @@ class ReadoutInterface:
         message = self._socket.recv_pyobj()
         logger.info(f"Received reply: {message}")
 
-    def get_raw_buffer(self) -> tuple[npt.NDArray, int, float]:
+    #def get_raw_buffer(self) -> tuple[npt.NDArray, int, float]:
+    def get_raw_buffer(self) -> npt.NDArray[np.float_]:
         """Get the raw buffer from the oscilloscope.
 
         Returns:
@@ -49,8 +50,9 @@ class ReadoutInterface:
         """
         print("get_raw_buffer")
         self._socket.send(b"1")
-        message = self._socket.recv(copy=False)
-        return message
+        response = self._socket.recv(copy=False)
+        raw_buffer = np.frombuffer(response, dtype=np.float_)
+        return raw_buffer
 
     def start(self):
         raise NotImplementedError
@@ -74,8 +76,9 @@ def main():
     # readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
     while True:
-        message = readout_interface.get_raw_buffer()
-        print(f"{message = }")
+        raw_buffer = readout_interface.get_raw_buffer()
+        print(f"{raw_buffer[:20] = }")
 
 if __name__ == "__main__":
     main()
+
