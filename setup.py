@@ -47,6 +47,6 @@ setup(
     ],
 
     keywords='oscilloscope generator',
-    packages=['redpitaya'],
+    packages=find_packages(),
     install_requires=['numpy', 'scipy', 'bokeh', 'IPython', 'ipywidgets'],
 )
