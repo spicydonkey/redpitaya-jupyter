@@ -1,0 +1,16 @@
+# This is a systemd service file for the Readout System Server
+# The server will run with Python 3 and listen on port 5555
+
+[Unit]
+Description=Readout System Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m redpitaya.readout.readout_server -p 5555 -v 0
+User=root
+Group=root
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
