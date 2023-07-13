@@ -6,7 +6,7 @@ Description=Readout System Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 -m redpitaya.readout.readout_server -p 5555 -v 0
+ExecStart=/usr/bin/python3 -m redpitaya.readout.readout_server -p 5555
 User=root
 Group=root
 Restart=always
