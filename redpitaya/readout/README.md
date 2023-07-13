@@ -1,4 +1,4 @@
-# Redpitaya
+# Redpitaya readout module
 
 ## Benchmarks
 - Data serialisation: `benchmarks/serialisation.py`
