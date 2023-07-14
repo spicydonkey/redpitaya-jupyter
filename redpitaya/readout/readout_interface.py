@@ -64,10 +64,10 @@ class ReadoutInterface:
         """The scale factor for the input range.
 
         input range to scale mapping:
-        1.0:    1/32767.0
-        20.0:   20.0/32767.0
+        1.0:    20.0 * 1.0/32767.0
+        20.0:   1.0/32767.0
         """
-        return 3.051850947599719e-05  # 1.0/32767.0
+        return 20 * 3.051850947599719e-05
 
     @property
     def sampling_rate(self) -> float:
