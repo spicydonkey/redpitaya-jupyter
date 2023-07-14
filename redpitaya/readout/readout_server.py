@@ -17,18 +17,23 @@ logger = logging.getLogger(__name__)
 class ReadoutServer:
     """Readout system server.
     """
-    def __init__(self, 
+    def __init__(self,
                  port: str="5555",
                  input_ranges: tuple[InputRange, InputRange]=(InputRange.LV_1, InputRange.LV_1,),
                  signal_channel: InputChannel=InputChannel.CH1,
                  trigger_channel: InputChannel=InputChannel.CH2,
-                 trigger_level: tuple[float, ...]=(0.5,),  # FIXME: CHECK THIS
+                 trigger_level: tuple[float, float]=(0.5, 0.6),
                  trigger_edge: TriggerEdge=TriggerEdge.NEG,
                  ) -> None:
-        """Initialize the server.
+        """Initialize the Readout system.
 
         Args:
             port: The port to listen on. Defaults to "5555".
+            input_ranges: The input ranges for the two channels. Defaults to (InputRange.LV_1, InputRange.LV_1).
+            signal_channel: The signal channel. Defaults to InputChannel.CH1.
+            trigger_channel: The trigger channel. Defaults to InputChannel.CH2.
+            trigger_level: The trigger level. Defaults to (0.5, 0.6).
+            trigger_edge: The trigger edge type. Defaults to TriggerEdge.NEG.
         """
         self.signal_channel = signal_channel
 
@@ -176,6 +181,8 @@ class ReadoutServer:
                 self._socket.send(b"Unknown command")
 
 def main():
+    """Start the server.
+    """
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--port", type=str, help="port of the server",
