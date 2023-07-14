@@ -9,6 +9,7 @@ import numpy as np
 import zmq
 
 from redpitaya.overlay.mercury import mercury as overlay
+from . import InputRange, TriggerEdge, InputChannel
 
 
 logger = logging.getLogger(__name__)
@@ -16,23 +17,33 @@ logger = logging.getLogger(__name__)
 class ReadoutServer:
     """Readout system server.
     """
-    def __init__(self, port: str="5555") -> None:
+    def __init__(self, 
+                 port: str="5555",
+                 input_ranges: tuple[InputRange, InputRange]=(InputRange.LV_1, InputRange.LV_1,),
+                 signal_channel: InputChannel=InputChannel.CH1,
+                 trigger_channel: InputChannel=InputChannel.CH2,
+                 trigger_level: tuple[float, ...]=(0.5,),  # FIXME: CHECK THIS
+                 trigger_edge: TriggerEdge=TriggerEdge.NEG,
+                 ) -> None:
         """Initialize the server.
 
         Args:
             port: The port to listen on. Defaults to "5555".
         """
+        self.signal_channel = signal_channel
+
         # Set up the FPGA
         self._fpga = overlay()
-        # Set up the oscilloscope
-        self._osc0 = self._fpga.osc(0, 1.0)
-        # data rate decimation 
-        self._osc0.decimation = 4
-        # trigger timing [sample periods]
-        self._osc0.trigger_pre  = 0
-        self._osc0.trigger_post = self._osc0.buffer_size
-        # disable hardware trigger sources
-        self._osc0.trig_src = 0
+
+        # Instantiate oscilloscope devices
+        self._oscilloscopes = [self._fpga.osc(ch, input_ranges[ch].value) for ch in range(2)]
+
+        # Set up the trigger event
+        self._oscilloscopes[trigger_channel].level = trigger_level
+        self._oscilloscopes[trigger_channel].edge = trigger_edge.value
+        for osc in self._oscilloscopes:
+            osc.sync_src = self._fpga.sync_src[f"osc{signal_channel.value}"]
+            osc.trig_src = self._fpga.trig_src[f"osc{trigger_channel.value}"]
 
         # Set up the ZMQ socket
         self._context = zmq.Context()
@@ -44,42 +55,56 @@ class ReadoutServer:
                   decimation: int,
                   trigger_pre: int,
                   trigger_post: int,
-                #   trig_src: str,
                   ) -> None:
         """Configure the readout system.
         """
-        self._osc0.decimation = decimation
-        self._osc0.trigger_pre = trigger_pre
-        self._osc0.trigger_post = trigger_post
-        self._osc0.trig_src = 0  # disable hardware trigger sources
-        # self._osc0.trig_src = self._fpga.trig_src[trig_src]
-        # self._osc0.trig_src = self._fpga.trig_src["osc1"]
-        # self._osc0.edge = "pos"
-        # self._osc0.level = [0.4, 0.5]
+        for osc in self._oscilloscopes:
+            osc.decimation = decimation
+            osc.trigger_pre = trigger_pre
+            osc.trigger_post = trigger_post
 
-    def trigger(self) -> tuple[int, float]:
-        """Force a trigger.
+        # # 1. Software trigger
+        # self._oscs[self.SIGNAL_CHANNEL].trig_src = 0  # disable hardware trigger sources
+        
+        # # 2. Internal trigger
+        # # trigger source is the level trigger from the same input
+        # self._oscs[self.SIGNAL_CHANNEL].trig_src = self._fpga.trig_src["osc0"]
+        # self._oscs[self.SIGNAL_CHANNEL].level = [0.4, 0.5]   # trigger level, or pair [neg, pos] for hysteresis (V)
+        # self._oscs[self.SIGNAL_CHANNEL].edge  = 'pos'        # trigger edge type: ['neg', 'pos']
+
+        # # 3. External trigger
+        # # NOT DOCUMENTED!
+
+    def capture(self, force: bool=False) -> tuple[int, float]:
+        """Capture a shot.
+        
+        Args:
+            force: If True, force a trigger. If False, waits for programmed trigger event.
+            Defaults to False.
         
         Returns:
             (pointer, timestamp):
                 pointer: The index of the trigger.
                 timestamp: The timestamp of the trigger.
         """
-        # synchronization and trigger sources are the default,
-        # which is the module itself
         logger.info("Triggering...")
-        self._osc0.reset()
-        self._osc0.start()
-        self._osc0.trigger()
-        while self._osc0.status_run():
+        self._oscilloscopes[self.signal_channel].reset()
+        self._oscilloscopes[self.signal_channel].start()
+        if force:
+            self._oscilloscopes[self.signal_channel].trigger()
+        while self._oscilloscopes[self.signal_channel].status_run():
             pass
-        timestamp = time.perf_counter()
-        pointer = int(self._osc0.pointer)
+        timestamp = time.time()
+        pointer = int(self._oscilloscopes[self.signal_channel].pointer)
         logger.info('Triggered!')
         return (pointer, timestamp)
 
     def transfer_raw_buffer(self) -> None:
-        pointer, timestamp = self.trigger()  # NOTE: this is overloading the meaning of transfer
+        """Transfer the raw buffer to the client.
+        """
+
+        # NOTE: this is overloading the meaning of transfer
+        pointer, timestamp = self.capture(force=False)
 
         # Bus error
         #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
@@ -99,9 +124,15 @@ class ReadoutServer:
         #buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
         #socket.send(buffer_np[:], copy=False)
 
+        # # OK: 5.6 ms
+        # buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
+        # buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
+        # buffer_copy[:] = buffer_np[:]
+
         # OK: 5.6 ms
-        buffer_np = np.ctypeslib.as_array(self._osc0.buffer)
-        buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
+        buffer_np = np.ctypeslib.as_array(self._oscilloscopes[self.signal_channel].buffer)
+        # FIXME: OPTIMISATION: we don't need to regenerate the buffer_copy every time, and we know the size.
+        buffer_copy = np.empty(len(self._oscilloscopes[self.signal_channel].buffer))  # dtype=np.int16 crashes
         buffer_copy[:] = buffer_np[:]
 
         logger.debug("type(buffer_np[0]) = %s", type(buffer_np[0]))
