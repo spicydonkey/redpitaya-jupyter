@@ -111,7 +111,7 @@ class ReadoutInterface:
         message = self._socket.recv()
         logger.debug("message = %s", message)
 
-    def _get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
+    def get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
         """Get the raw buffer from the oscilloscope.
 
         Returns:
@@ -154,9 +154,9 @@ class ReadoutInterface:
         Returns:
             The Result.
         """
-        raw_buffer, pointer, timestamp = self._get_raw_buffer()
+        raw_buffer, pointer, timestamp = self.get_raw_buffer()
         return Result(
-            waveform=self.raw_buffer_to_waveform(raw_buffer, pointer, self.scale).tolist(),  # FIXME
+            waveform=self.raw_buffer_to_waveform(raw_buffer, pointer, self.scale).tolist(),
             timestamp=timestamp,
             sampling_rate=self.sampling_rate,
             )
@@ -201,7 +201,7 @@ def main():
 
     start = time.time()
     while time.time() - start < 10:
-        raw_buffer, pointer, timestamp = readout_interface._get_raw_buffer()
+        raw_buffer, pointer, timestamp = readout_interface.get_raw_buffer()
         print(f"{raw_buffer[:20] = }")
         print(f"{pointer = }")
         print(f"{timestamp = }")
