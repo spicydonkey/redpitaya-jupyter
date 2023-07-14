@@ -6,10 +6,32 @@ import pickle
 
 import numpy as np
 import numpy.typing as npt
+from pydantic import BaseModel
 import zmq
 
 
 logger = logging.getLogger(__name__)
+
+class Result(BaseModel):
+    """The Result returned by the Readout system.
+    (For the lack of a better name...)
+    """
+
+    class Config:
+        # validate field defaults
+        validate_all = True
+        # validate on assignment to field
+        validate_assignment = True
+
+    waveform: list[float] # npt.NDArray[np.float_] FIXME: numpy arrays please!
+    """The captured waveform (V)."""
+
+    timestamp: float
+    """The time of acquisition (s)."""
+
+    sampling_rate: float
+    """The sampling rate (Samples/s)."""
+
 
 class ReadoutInterface:
     """Readout system interface.
@@ -29,7 +51,13 @@ class ReadoutInterface:
         self._socket.connect(f"tcp://{self._ip}:{self._port}")
         logger.info(f"Connected to tcp://{self._ip}:{self._port}")
 
-        self.configure()
+        self._decimation = 1  # FIXME: get from hardware.  ALWAYS!
+        self.base_sampling_rate = 125000000.0
+        self.num_samples = 2**14  # FIXME: get from hw
+
+        # FIXME: It's currently quite hacky -- user needs to "configure" before doing anything.
+        # would be good to make a "dummy".
+        # self.configure()
 
     @property
     def scale(self) -> float:
@@ -49,7 +77,7 @@ class ReadoutInterface:
             formula: 125e6/decimation
             where decimation should be a power of 2
         """
-        return 125000000.0 / self.decimation
+        return self.base_sampling_rate / self.decimation
 
     @property
     def decimation(self) -> int:
@@ -61,7 +89,6 @@ class ReadoutInterface:
                   decimation: int=1,
                   trigger_pre: int=0,
                   trigger_post: int=2**14,
-                #   trig_src: str,
                   ) -> None:
         """Configure the readout system.
 
@@ -76,7 +103,6 @@ class ReadoutInterface:
             "decimation": decimation,
             "trigger_pre": trigger_pre,
             "trigger_post": trigger_post,
-            # "trig_src": trig_src,
         }
         print(f"{data = }")
         self._socket.send(b"c" + pickle.dumps(data))
@@ -85,7 +111,7 @@ class ReadoutInterface:
         message = self._socket.recv()
         print(message)
 
-    def get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
+    def _get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
         """Get the raw buffer from the oscilloscope.
 
         Returns:
@@ -94,7 +120,7 @@ class ReadoutInterface:
                 pointer: index to trigger.
                 timestamp: timestamp of the trigger.
         """
-        print("get_raw_buffer")
+        print("_get_raw_buffer")
         self._socket.send(b"g")
         # response = self._socket.recv(copy=False)
         # raw_buffer = np.frombuffer(response, dtype=np.float_)
@@ -105,16 +131,49 @@ class ReadoutInterface:
         timestamp = float(timestamp_bytes.decode("utf-8"))
         return raw_buffer, pointer, timestamp
 
+    @staticmethod
+    def raw_buffer_to_waveform(
+        raw_buffer: npt.NDArray[np.float_],
+        pointer: int,
+        scale: float,
+        ) -> npt.NDArray[np.float_]:
+        """Convert the raw buffer to the captured waveform.
+
+        Args:
+            raw_buffer: The raw buffer waveform.
+            pointer: The index to trigger.
+            scale: The scale factor for the input range.
+
+        Returns:
+            The captured waveform (V).
+        """
+        return scale * np.roll(raw_buffer, -pointer)
+
+    def get_result(self) -> Result:
+        """Get the result from the readout system.
+
+        Returns:
+            The Result.
+        """
+        raw_buffer, pointer, timestamp = self._get_raw_buffer()
+        return Result(
+            waveform=self.raw_buffer_to_waveform(raw_buffer, pointer, self.scale).tolist(),  # FIXME
+            timestamp=timestamp,
+            sampling_rate=self.sampling_rate,
+            )
+
     def start(self):
         raise NotImplementedError
 
     def stop(self):
         raise NotImplementedError
 
-def main(): 
+def main():
     """Test of the readout interface.
     """
     import argparse
+    import time
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--ip", type=str, help="ip address of the server",
                         default="localhost")
@@ -129,11 +188,15 @@ def main():
 
     readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
-    while True:
-        raw_buffer, pointer, timestamp = readout_interface.get_raw_buffer()
+    start = time.time()
+    while time.time() - start < 10:
+        raw_buffer, pointer, timestamp = readout_interface._get_raw_buffer()
         print(f"{raw_buffer[:20] = }")
         print(f"{pointer = }")
         print(f"{timestamp = }")
+
+    print("-"*80)
+    print("Pass")
 
 if __name__ == "__main__":
     main()

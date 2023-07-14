@@ -48,5 +48,6 @@ setup(
 
     keywords='oscilloscope generator',
     packages=find_packages(),
-    install_requires=['numpy', 'scipy', 'bokeh', 'IPython', 'ipywidgets'],
+    install_requires=['numpy', 'scipy', 'bokeh', 'IPython', 'ipywidgets',
+                      'pyzmq', 'pydantic'],
 )
