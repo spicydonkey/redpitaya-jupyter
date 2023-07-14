@@ -19,7 +19,7 @@ class ReadoutServer:
     """
     def __init__(self,
                  port: str="5555",
-                 input_ranges: tuple[InputRange, InputRange]=(InputRange.LV_1, InputRange.LV_1,),
+                 input_ranges: tuple[InputRange, InputRange]=(InputRange.LV, InputRange.HV),
                  signal_channel: InputChannel=InputChannel.CH1,
                  trigger_channel: InputChannel=InputChannel.CH2,
                  trigger_level: tuple[float, float]=(0.5, 0.6),
@@ -29,7 +29,7 @@ class ReadoutServer:
 
         Args:
             port: The port to listen on. Defaults to "5555".
-            input_ranges: The input ranges for the two channels. Defaults to (InputRange.LV_1, InputRange.LV_1).
+            input_ranges: The input ranges for the two channels. Defaults to (InputRange.LV, InputRange.HV).
             signal_channel: The signal channel. Defaults to InputChannel.CH1.
             trigger_channel: The trigger channel. Defaults to InputChannel.CH2.
             trigger_level: The trigger level. Defaults to (0.5, 0.6).

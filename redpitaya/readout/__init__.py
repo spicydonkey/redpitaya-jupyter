@@ -1,12 +1,12 @@
 """Red Pitaya readout module.
 """
 
-from enum import auto, Enum, IntEnum
+from enum import Enum, IntEnum
 
 class InputRange(Enum):
     """Enum for input ranges"""
-    LV_1 = 1.0
-    HV_20 = 20.0
+    LV = 1.0
+    HV = 20.0
 
 class TriggerEdge(Enum):
     """Enum for trigger edge"""
