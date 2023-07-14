@@ -47,9 +47,9 @@ class ReadoutInterface:
         self._ip = ip
         self._port = port
         self._context = zmq.Context()
-        self._socket = self._context.socket(zmq.REQ)
+        self._socket: zmq.Socket[zmq.SocketType] = self._context.socket(zmq.REQ)
         self._socket.connect(f"tcp://{self._ip}:{self._port}")
-        logger.info(f"Connected to tcp://{self._ip}:{self._port}")
+        logger.info("Connected to tcp://%s:%s", self._ip, self._port)
 
         self._decimation = 1  # FIXME: get from hardware.  ALWAYS!
         self.base_sampling_rate = 125000000.0
@@ -98,18 +98,18 @@ class ReadoutInterface:
             trigger_post: The post-trigger delay. Defaults to 2**14.
         """
         self._decimation = decimation
-        print("Configuring readout system...")
+        logger.info("Configuring readout system...")
         data = {
             "decimation": decimation,
             "trigger_pre": trigger_pre,
             "trigger_post": trigger_post,
         }
-        print(f"{data = }")
+        logger.debug("data = %s", data)
         self._socket.send(b"c" + pickle.dumps(data))
 
         # wait for the response
         message = self._socket.recv()
-        print(message)
+        logger.debug("message = %s", message)
 
     def _get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
         """Get the raw buffer from the oscilloscope.
@@ -120,7 +120,6 @@ class ReadoutInterface:
                 pointer: index to trigger.
                 timestamp: timestamp of the trigger.
         """
-        print("_get_raw_buffer")
         self._socket.send(b"g")
         # response = self._socket.recv(copy=False)
         # raw_buffer = np.frombuffer(response, dtype=np.float_)
@@ -184,8 +183,20 @@ def main():
     args = parser.parse_args()
     print(f"{args = }")
 
-    readout_interface = ReadoutInterface(ip=args.ip, port=args.port)
+    # Set up logging based on the verbosity argument.
+    # Verbosity levels:
+    # - 0: WARNING
+    # - 1: INFO
+    # - 2+: DEBUG
+    if args.verbosity >= 2:
+        log_level = logging.DEBUG
+    elif args.verbosity == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARNING
+    logging.basicConfig(level=log_level)
 
+    readout_interface = ReadoutInterface(ip=args.ip, port=args.port)
     readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
     start = time.time()

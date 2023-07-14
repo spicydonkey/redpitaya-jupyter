@@ -36,9 +36,9 @@ class ReadoutServer:
 
         # Set up the ZMQ socket
         self._context = zmq.Context()
-        self._socket = self._context.socket(zmq.REP)
+        self._socket: zmq.Socket[zmq.SocketType] = self._context.socket(zmq.REP)
         self._socket.bind(f"tcp://*:{port}")
-        print(f"Server started: tcp://*:{port}")
+        logger.info("Server started: tcp://*:%s", port)
 
     def configure(self,
                   decimation: int,
@@ -67,7 +67,7 @@ class ReadoutServer:
         """
         # synchronization and trigger sources are the default,
         # which is the module itself
-        print("Triggering...")
+        logger.info("Triggering...")
         self._osc0.reset()
         self._osc0.start()
         self._osc0.trigger()
@@ -75,7 +75,7 @@ class ReadoutServer:
             pass
         timestamp = time.perf_counter()
         pointer = int(self._osc0.pointer)
-        print ('Triggered!')
+        logger.info('Triggered!')
         return (pointer, timestamp)
 
     def transfer_raw_buffer(self) -> None:
@@ -104,11 +104,11 @@ class ReadoutServer:
         buffer_copy = np.empty(len(self._osc0.buffer))  # dtype=np.int16 crashes
         buffer_copy[:] = buffer_np[:]
 
-        print(f"{type(buffer_np[0]) = }")
-        print(f"{type(buffer_copy[0]) = }")  # it's in np.float_
-        print(f"{buffer_copy[:20] = }")
-        print(f"{pointer = }")
-        print(f"{timestamp = }")
+        logger.debug("type(buffer_np[0]) = %s", type(buffer_np[0]))
+        logger.debug("type(buffer_copy[0]) = %s", type(buffer_copy[0]))  # it's in np.float_
+        logger.debug("buffer_copy[:20] = %s", buffer_copy[:20])
+        logger.debug("pointer = %s", pointer)
+        logger.debug("timestamp = %s", timestamp)
 
         self._socket.send_multipart(
             [
@@ -122,11 +122,11 @@ class ReadoutServer:
     def run(self):
         """Run the server.
         """
-        print("Server running.")
+        logger.info("Server running.")
         while True:
              #  Wait for next request from client
             message = self._socket.recv()
-            print(f"Received request: {message}")
+            logger.info("Received request: %s", message)
 
             # first byte of the message will determine the command
             command = message[0]
@@ -138,7 +138,7 @@ class ReadoutServer:
                 # rest_of_message should contain the configuration data
                 message_body = message[1:]
                 parameters = pickle.loads(message_body)
-                print(f"{parameters = }")
+                logger.debug("parameters = %s", parameters)
                 self.configure(**parameters)
                 self._socket.send(b"Configuration complete")
             else:
@@ -153,6 +153,19 @@ def main():
                         help="increase output verbosity")
     args = parser.parse_args()
     print(f"{args = }")
+
+    # Set up logging based on the verbosity argument.
+    # Verbosity levels:
+    # - 0: WARNING
+    # - 1: INFO
+    # - 2+: DEBUG
+    if args.verbosity >= 2:
+        log_level = logging.DEBUG
+    elif args.verbosity == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARNING
+    logging.basicConfig(level=log_level)
 
     readout_server = ReadoutServer(args.port)
     readout_server.run()
