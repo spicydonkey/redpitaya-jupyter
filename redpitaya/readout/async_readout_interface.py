@@ -85,7 +85,7 @@ class ReadoutInterface:
         """
         return self._decimation
 
-    def configure(self,
+    async def configure(self,
                   decimation: int=1,
                   trigger_pre: int=0,
                   trigger_post: int=2**14,
@@ -108,7 +108,7 @@ class ReadoutInterface:
         self._socket.send(b"c" + pickle.dumps(data))
 
         # wait for the response
-        message = self._socket.recv()
+        message = await self._socket.recv()
         logger.debug("message = %s", message)
 
     async def get_raw_buffer(self) -> tuple[npt.NDArray[np.float_], int, float]:
@@ -195,7 +195,7 @@ async def main():
     logging.basicConfig(level=log_level)
 
     readout_interface = ReadoutInterface(ip=args.ip, port=args.port)
-    readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
+    await readout_interface.configure(decimation=1, trigger_pre=0, trigger_post=2**14)
 
     start = time.time()
     while time.time() - start < 10:
